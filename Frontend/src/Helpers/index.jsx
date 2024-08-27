@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useState } from 'react';
 
 // Crear una instancia de Axios
 export const apiClient = axios.create({
@@ -11,30 +12,27 @@ export const apiClient = axios.create({
 
 // Interceptor de respuesta para manejar la renovación del token
 apiClient.interceptors.response.use(
-
     response => {
         // Si la respuesta es exitosa, simplemente la retornamos
-        console.log(response);
+      /*   console.log(response); */
         return response;
     },
     async error => {
-        console.log('mamo1');
-
-        console.log(error);
         const originalRequest = error.config;
-        console.log('mamo2');
 
+        // Verificar si el error es 401 y la solicitud no es para /auth/login
+        if (error.response.data.shouldRenewToken && !originalRequest._retry) {
+            // Evitar la renovación de token si la solicitud es para /auth/login
+           /*  if (originalRequest.url === '/auth/login') {
+                // Rechazamos el error sin intentar renovar el token
+                console.log('Aqui se rechaza antes' + error);
+                return
+            } */
 
-        // Si el error es 401, intentamos renovar el token
-        if (error.response.status === 401 && !originalRequest._retry) {
-
-            console.log('Tiene un 401');
-
+            // Si no es la solicitud de login, intentamos renovar el token
             originalRequest._retry = true;
-
             try {
                 // Llamada al endpoint de renovación de token
-                console.log('pero aqui manda a hacer un refresh');
                 await apiClient.post('/auth/renewToken');
 
                 // Reintentamos la solicitud original con el nuevo token
@@ -42,7 +40,8 @@ apiClient.interceptors.response.use(
             } catch (renewError) {
                 // Si la renovación falla, redirigimos al login o manejamos el error
                 console.error('Failed to renew token:', renewError.response.data);
-                // Puedes redirigir al usuario a la página de login aquí
+                // Puedes redirigir al usuario a la página de login aquí, o lanzar el error
+                return Promise.reject(renewError);
             }
         }
 
@@ -50,4 +49,26 @@ apiClient.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+export const useRequestStatus = () => {
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [data, setData] = useState(null);
+
+    const makeRequest = async (url, options) => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const response = await axios(url, options);
+            setData(response.data);
+            return response.data;
+        } catch (err) {
+            setError(err.message || 'Something went wrong');
+            return null;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return { isLoading, error, data, makeRequest };
+};
 
